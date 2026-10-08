@@ -1,4 +1,4 @@
-// URL base de tu API desplegada en Render (o localhost si pruebas local)
+// URL base de tu API desplegada en Render
 const API_BASE_URL = 'https://api-tienda-daw.onrender.com/api';
 
 let listaProductos = [];
@@ -22,7 +22,6 @@ async function inicializarApp() {
     loadingIndicator.classList.remove('hidden');
     errorMsg.classList.add('hidden');
 
-    // Consumo concurrente de dos recursos de la API
     const [resProductos, resCategorias] = await Promise.all([
       fetch(`${API_BASE_URL}/productos`),
       fetch(`${API_BASE_URL}/categorias`)
@@ -48,6 +47,7 @@ async function inicializarApp() {
 
 // 2. Poblar opciones del select de categorías dinámicamente
 function poblarFiltroCategorias() {
+  selectCategoria.innerHTML = '<option value="todas">Todas las categorías</option>';
   listaCategorias.forEach(cat => {
     const option = document.createElement('option');
     option.value = cat.id;
@@ -61,7 +61,7 @@ function renderizarProductos(productos) {
   catalogoContainer.innerHTML = '';
 
   if (productos.length === 0) {
-    catalogoContainer.innerHTML = '<p class="status-msg">No se encontraron productos que coincidan con la búsqueda.</p>';
+    catalogoContainer.innerHTML = '<p class="status-msg">No se encontraron productos que coincidan.</p>';
     return;
   }
 
@@ -69,11 +69,11 @@ function renderizarProductos(productos) {
     const card = document.createElement('div');
     card.classList.add('card');
     card.innerHTML = `
-      <img src="${prod.imagen}" alt="${prod.nombre}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 0.8rem;">
+      <img src="${prod.imagen || 'https://via.placeholder.com/300'}" alt="${prod.nombre}" style="width: 100%; height: 180px; object-fit: cover; border-radius: 6px; margin-bottom: 0.8rem;">
       <div>
         <small style="color: #718096; text-transform: uppercase; font-weight: bold;">${prod.marca || 'Genérico'}</small>
         <h3 style="font-size: 1.1rem; margin-top: 0.2rem;">${prod.nombre}</h3>
-        <p class="price">S/ ${prod.precio.toFixed(2)}</p>
+        <p class="price">S/ ${Number(prod.precio).toFixed(2)}</p>
       </div>
       <div class="card-buttons">
         <button class="btn-detail" onclick="verDetalle(${prod.id})">Detalle</button>
@@ -82,6 +82,20 @@ function renderizarProductos(productos) {
     `;
     catalogoContainer.appendChild(card);
   });
+}
+
+// 4. Búsqueda y Filtros
+function aplicarFiltros() {
+  const texto = inputBusqueda.value.toLowerCase();
+  const catSeleccionada = selectCategoria.value;
+
+  const filtrados = listaProductos.filter(prod => {
+    const coincideNombre = prod.nombre.toLowerCase().includes(texto);
+    const coincideCat = catSeleccionada === 'todas' || prod.categoriaId == catSeleccionada;
+    return coincideNombre && coincideCat;
+  });
+
+  renderizarProductos(filtrados);
 }
 
 inputBusqueda.addEventListener('input', aplicarFiltros);
@@ -96,16 +110,19 @@ window.verDetalle = function(id) {
   const nombreCat = categoria ? categoria.nombre : 'Sin categoría';
 
   detalleInfo.innerHTML = `
-    <img src="${prod.imagen}" alt="${prod.nombre}" style="width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; margin-bottom: 1rem;">
+    <img src="${prod.imagen || 'https://via.placeholder.com/300'}" alt="${prod.nombre}" style="width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; margin-bottom: 1rem;">
     <h2>${prod.nombre}</h2>
-    <p style="color: #4a5568; margin: 0.5rem 0;">${prod.descripcion}</p>
-    <p><strong>Marca:</strong> ${prod.marca}</p>
+    <p style="color: #4a5568; margin: 0.5rem 0;">${prod.descripcion || 'Sin descripción'}</p>
+    <p><strong>Marca:</strong> ${prod.marca || 'N/A'}</p>
     <p><strong>Categoría:</strong> ${nombreCat}</p>
-    <p><strong>Stock disponible:</strong> ${prod.stock} unidades</p>
-    <p class="price" style="font-size: 1.4rem; margin-top: 0.5rem;">S/ ${prod.precio.toFixed(2)}</p>
+    <p><strong>Stock disponible:</strong> ${prod.stock || 0} unidades</p>
+    <p class="price" style="font-size: 1.4rem; margin-top: 0.5rem;">S/ ${Number(prod.precio).toFixed(2)}</p>
   `;
   modalDetalle.classList.remove('hidden');
 };
+
+document.getElementById('close-modal').onclick = () => modalDetalle.classList.add('hidden');
+
 // 6. Carrito de Compras
 window.agregarAlCarrito = function(id) {
   const prod = listaProductos.find(p => p.id === id);
@@ -127,8 +144,8 @@ function actualizarCarrito() {
     itemRow.classList.add('cart-item');
     itemRow.innerHTML = `
       <span>${item.nombre}</span>
-      <span>S/ ${item.precio.toFixed(2)}</span>
-      <button onclick="eliminarDelCarrito(${index})" style="color:red; background:none; border:none; cursor:pointer;">✕</button>
+      <span>S/ ${Number(item.precio).toFixed(2)}</span>
+      <button onclick="eliminarDelCarrito(${index})" style="color:red; background:none; border:none; cursor:pointer; font-weight:bold;">✕</button>
     `;
     listaCont.appendChild(itemRow);
   });
@@ -143,10 +160,12 @@ window.eliminarDelCarrito = function(index) {
 
 document.getElementById('btn-ver-carrito').onclick = () => modalCarrito.classList.remove('hidden');
 document.getElementById('close-carrito').onclick = () => modalCarrito.classList.add('hidden');
+
 document.getElementById('btn-vaciar').onclick = () => {
   carrito = [];
   actualizarCarrito();
 };
+
 document.getElementById('btn-comprar').onclick = () => {
   if (carrito.length === 0) {
     alert('El carrito está vacío.');
